@@ -1,6 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
+const APP_VERSION = "0.1.4";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -150,11 +151,12 @@ worker.onmessage = async (e) => {
     let quotaInfo = "";
     try {
       const { usage, quota } = await navigator.storage.estimate();
-      quotaInfo = `／このアプリの枠: 使用${fmtSize(usage || 0)} ÷ 上限${fmtSize(quota || 0)}`;
+      quotaInfo = `\nこのアプリの枠: 使用${fmtSize(usage || 0)} ÷ 上限${fmtSize(quota || 0)}`;
     } catch (_) { /* 診断表示のみ */ }
-    p.rowEl.querySelector(".name").textContent =
-      `✕ ${p.file.name} — 保存失敗: ${message}（${fmtSize(written || 0)}まで書けた${quotaInfo}）`;
+    const detail = `保存失敗: ${message}\n${fmtSize(written || 0)}まで書けた${quotaInfo}`;
+    p.rowEl.querySelector(".name").textContent = `✕ ${p.file.name} — ${detail.replace(/\n/g, "／")}`;
     pendingImports.delete(id);
+    alert(`「${p.file.name}」\n${detail}`);
   }
 };
 
@@ -242,6 +244,7 @@ document.addEventListener("visibilitychange", () => {
 
 /* ---------- 起動 ---------- */
 (async function init() {
+  $("ver").textContent = "v" + APP_VERSION;
   const supported = !!(navigator.storage && navigator.storage.getDirectory);
   if (!supported) $("unsupported-hint").classList.add("show");
   if (!window.navigator.standalone && /iPhone|iPad/.test(navigator.userAgent)) {

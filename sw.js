@@ -1,7 +1,7 @@
 /* appMoove - Service Worker: アプリ本体を丸ごとキャッシュしてオフライン起動 */
 "use strict";
 
-const CACHE = "moove-v3";
+const CACHE = "moove-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,7 +14,12 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // HTTPキャッシュ(Pagesのmax-age=600)を必ず飛ばして最新を取る
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (e) => {
