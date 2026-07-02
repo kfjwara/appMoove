@@ -8,13 +8,13 @@ self.onmessage = (e) => {
 };
 
 async function store({ id, file }) {
+  let at = 0;
   try {
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle(id, { create: true });
     const handle = await fh.createSyncAccessHandle();
     postMessage({ id, type: "progress", written: 0, total: file.size });
     const reader = file.stream().getReader();
-    let at = 0;
     let lastPost = 0;
     for (;;) {
       const { done, value } = await reader.read();
@@ -34,6 +34,6 @@ async function store({ id, file }) {
       const root = await navigator.storage.getDirectory();
       await root.removeEntry(id);
     } catch (_) { /* 書きかけが無ければそれでよい */ }
-    postMessage({ id, type: "error", message: String((err && err.message) || err) });
+    postMessage({ id, type: "error", message: `${(err && err.name) || ""} ${(err && err.message) || err}`, written: at });
   }
 }

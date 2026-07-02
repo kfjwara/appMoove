@@ -147,7 +147,13 @@ worker.onmessage = async (e) => {
     refreshStorageMeter();
   } else if (type === "error") {
     p.rowEl.classList.add("error");
-    p.rowEl.querySelector(".name").textContent = `✕ ${p.file.name} — 保存失敗: ${message}（空き容量を確認してや）`;
+    let quotaInfo = "";
+    try {
+      const { usage, quota } = await navigator.storage.estimate();
+      quotaInfo = `／このアプリの枠: 使用${fmtSize(usage || 0)} ÷ 上限${fmtSize(quota || 0)}`;
+    } catch (_) { /* 診断表示のみ */ }
+    p.rowEl.querySelector(".name").textContent =
+      `✕ ${p.file.name} — 保存失敗: ${message}（${fmtSize(written || 0)}まで書けた${quotaInfo}）`;
     pendingImports.delete(id);
   }
 };
