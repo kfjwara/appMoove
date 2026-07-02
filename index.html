@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>appMoove</title>
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Moove">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b23;
+    --card-hover: #1e222c;
+    --text: #e8eaf0;
+    --text-dim: #8b90a0;
+    --accent: #6366f1;
+    --accent-soft: rgba(99, 102, 241, .18);
+    --danger: #f87171;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
+  body { padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px); min-height: 100vh; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  header { padding: 18px 0 10px; }
+  header h1 { font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+  header h1 span { color: var(--accent); }
+  .storage { margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .storage .bar { height: 4px; background: #262a36; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+  .storage .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s; }
+
+  .hint { background: var(--accent-soft); border: 1px solid rgba(99,102,241,.35); color: #c7c9f5; font-size: 13px; line-height: 1.6; padding: 10px 12px; border-radius: 10px; margin: 10px 0; display: none; }
+  .hint.show { display: block; }
+
+  .player-box { display: none; position: sticky; top: env(safe-area-inset-top); z-index: 10; background: var(--bg); padding: 8px 0 4px; }
+  .player-box.show { display: block; }
+  video { width: 100%; border-radius: var(--radius); background: #000; display: block; max-height: 42vh; }
+  .now-playing { font-size: 13px; color: var(--text-dim); padding: 8px 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now-playing b { color: var(--text); font-weight: 600; }
+
+  .import-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; margin: 12px 0; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; }
+  .import-btn:active { opacity: .85; }
+  #file-input { display: none; }
+
+  .progress-row { background: var(--card); border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
+  .progress-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .progress-row .bar { height: 4px; background: #262a36; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+  .progress-row .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; }
+  .progress-row.error { color: var(--danger); }
+
+  #list { margin-top: 6px; }
+  .item { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor: pointer; }
+  .item.playing { outline: 2px solid var(--accent); }
+  .item .info { flex: 1; min-width: 0; }
+  .item .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .item .watchbar { height: 3px; background: #262a36; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+  .item .watchbar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .item .del { flex: none; border: none; background: none; color: var(--text-dim); font-size: 18px; padding: 8px; cursor: pointer; }
+  .item .del:active { color: var(--danger); }
+
+  .empty { text-align: center; color: var(--text-dim); font-size: 14px; line-height: 1.9; padding: 40px 10px; }
+  .empty .big { font-size: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>app<span>Moove</span></h1>
+    <div class="storage" id="storage" hidden>
+      <span id="storage-text"></span>
+      <div class="bar"><i id="storage-fill"></i></div>
+    </div>
+  </header>
+
+  <div class="hint" id="standalone-hint">
+    まだブラウザで開いてるで。共有メニューから<b>「ホーム画面に追加」</b>して、そっちのアプリから動画を取り込むんや（保存領域が別々やからな）。
+  </div>
+  <div class="hint" id="unsupported-hint">
+    この環境はアプリ内ストレージ（OPFS）非対応や。iOS 15.2以降の Safari で開いてや。
+  </div>
+
+  <div class="player-box" id="player-box">
+    <video id="video" controls playsinline preload="metadata"></video>
+    <div class="now-playing" id="now-playing"></div>
+  </div>
+
+  <label class="import-btn" for="file-input">＋ 動画を取り込む</label>
+  <input type="file" id="file-input" accept="video/*" multiple>
+
+  <div id="import-progress"></div>
+  <div id="list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
