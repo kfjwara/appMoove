@@ -1,5 +1,11 @@
-/* appMoove - OPFSへ動画をチャンク書き込みするWorker（メモリに全載せしない） */
+/* appMoove - OPFSへ動画をチャンク書き込みするWorker（メモリに全載せしない）
+   iOSは画面ロック/バックグラウンドでAccessHandleを閉じることがあるため、
+   位置指定のslice読み＋ハンドル再取得リトライで続きから書き込み再開する */
 "use strict";
+
+const CHUNK = 8 * 1024 * 1024;
+const MAX_RETRY = 120; // 約2分ぶん粘る（復帰待ち）
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let queue = Promise.resolve();
 self.onmessage = (e) => {
@@ -12,16 +18,26 @@ async function store({ id, file }) {
   try {
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle(id, { create: true });
-    const handle = await fh.createSyncAccessHandle();
+    let handle = await fh.createSyncAccessHandle();
     postMessage({ id, type: "progress", written: 0, total: file.size });
-    const reader = file.stream().getReader();
     let lastPost = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      handle.write(value, { at });
-      at += value.byteLength;
-      if (at - lastPost > 4 * 1024 * 1024) {
+    while (at < file.size) {
+      const end = Math.min(at + CHUNK, file.size);
+      let wrote = false;
+      for (let attempt = 0; !wrote; attempt++) {
+        try {
+          const buf = await file.slice(at, end).arrayBuffer();
+          handle.write(buf, { at });
+          wrote = true;
+        } catch (err) {
+          if (attempt >= MAX_RETRY) throw err;
+          await sleep(1000);
+          try { handle.close(); } catch (_) { /* 既に閉じられている */ }
+          try { handle = await fh.createSyncAccessHandle(); } catch (_) { /* 復帰前なら次の周回で再試行 */ }
+        }
+      }
+      at = end;
+      if (at - lastPost >= 2 * CHUNK) {
         lastPost = at;
         postMessage({ id, type: "progress", written: at, total: file.size });
       }

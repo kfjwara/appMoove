@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.4";
+const APP_VERSION = "0.1.5";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -125,6 +125,22 @@ function showFatal(msg) {
   importProgressEl.appendChild(el);
 }
 worker.onerror = (e) => showFatal(`Workerエラー: ${e.message || "不明"}（${e.filename}:${e.lineno}）`);
+
+/* 取り込み中は画面を消灯させない（iOSはロック時にAccessHandleを閉じるため） */
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator) || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch (_) { /* 非対応・拒否時はリトライ機構に任せる */ }
+}
+function releaseWakeLockIfIdle() {
+  if (!pendingImports.size && wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && pendingImports.size) acquireWakeLock();
+});
 window.addEventListener("error", (e) => showFatal(`アプリエラー: ${e.message}`));
 window.addEventListener("unhandledrejection", (e) => showFatal(`エラー: ${(e.reason && e.reason.message) || e.reason}`));
 
@@ -144,6 +160,7 @@ worker.onmessage = async (e) => {
     });
     p.rowEl.remove();
     pendingImports.delete(id);
+    releaseWakeLockIfIdle();
     await renderList();
     refreshStorageMeter();
   } else if (type === "error") {
@@ -153,9 +170,14 @@ worker.onmessage = async (e) => {
       const { usage, quota } = await navigator.storage.estimate();
       quotaInfo = `\nこのアプリの枠: 使用${fmtSize(usage || 0)} ÷ 上限${fmtSize(quota || 0)}`;
     } catch (_) { /* 診断表示のみ */ }
-    const detail = `保存失敗: ${message}\n${fmtSize(written || 0)}まで書けた${quotaInfo}`;
+    let hint = "";
+    if (/AccessHandle is closed|InvalidState/i.test(message)) {
+      hint = "\n※画面ロックやアプリ切替で中断された可能性が高いで。画面を点けたまま置いといてや";
+    }
+    const detail = `保存失敗: ${message}\n${fmtSize(written || 0)}まで書けた${quotaInfo}${hint}`;
     p.rowEl.querySelector(".name").textContent = `✕ ${p.file.name} — ${detail.replace(/\n/g, "／")}`;
     pendingImports.delete(id);
+    releaseWakeLockIfIdle();
     alert(`「${p.file.name}」\n${detail}`);
   }
 };
@@ -165,6 +187,7 @@ $("file-input").addEventListener("change", (e) => {
   e.target.value = "";
   if (!files.length) return;
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  acquireWakeLock();
   for (const file of files) {
     const id = crypto.randomUUID();
     const rowEl = document.createElement("div");
