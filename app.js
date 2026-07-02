@@ -116,12 +116,26 @@ async function removeVideo(id) {
 const worker = new Worker("store-worker.js");
 const pendingImports = new Map(); // id -> {file, rowEl}
 
+function showFatal(msg) {
+  const el = document.createElement("div");
+  el.className = "progress-row error";
+  el.innerHTML = `<div class="name"></div>`;
+  el.querySelector(".name").textContent = "⚠ " + msg;
+  importProgressEl.appendChild(el);
+}
+worker.onerror = (e) => showFatal(`Workerエラー: ${e.message || "不明"}（${e.filename}:${e.lineno}）`);
+window.addEventListener("error", (e) => showFatal(`アプリエラー: ${e.message}`));
+window.addEventListener("unhandledrejection", (e) => showFatal(`エラー: ${(e.reason && e.reason.message) || e.reason}`));
+
 worker.onmessage = async (e) => {
   const { id, type, written, total, message } = e.data;
   const p = pendingImports.get(id);
   if (!p) return;
   if (type === "progress") {
-    p.rowEl.querySelector("i").style.width = Math.round((written / total) * 100) + "%";
+    const pct = Math.round((written / total) * 100);
+    p.rowEl.querySelector("i").style.width = pct + "%";
+    p.rowEl.querySelector(".name").textContent =
+      `${p.file.name}（${fmtSize(p.file.size)}）取り込み中… ${pct}%`;
   } else if (type === "done") {
     await dbPut({
       id, name: p.file.name.replace(/\.[^.]+$/, ""), size: p.file.size,
@@ -147,7 +161,7 @@ $("file-input").addEventListener("change", (e) => {
     const id = crypto.randomUUID();
     const rowEl = document.createElement("div");
     rowEl.className = "progress-row";
-    rowEl.innerHTML = `<div class="name">${esc(file.name)}（${fmtSize(file.size)}）取り込み中…</div><div class="bar"><i></i></div>`;
+    rowEl.innerHTML = `<div class="name">${esc(file.name)}（${fmtSize(file.size)}）取り込み開始… 0%</div><div class="bar"><i></i></div>`;
     importProgressEl.appendChild(rowEl);
     pendingImports.set(id, { file, rowEl });
     worker.postMessage({ id, file });

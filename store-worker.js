@@ -12,6 +12,7 @@ async function store({ id, file }) {
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle(id, { create: true });
     const handle = await fh.createSyncAccessHandle();
+    postMessage({ id, type: "progress", written: 0, total: file.size });
     const reader = file.stream().getReader();
     let at = 0;
     let lastPost = 0;
@@ -20,7 +21,7 @@ async function store({ id, file }) {
       if (done) break;
       handle.write(value, { at });
       at += value.byteLength;
-      if (at - lastPost > 16 * 1024 * 1024) {
+      if (at - lastPost > 4 * 1024 * 1024) {
         lastPost = at;
         postMessage({ id, type: "progress", written: at, total: file.size });
       }
