@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.7";
+const APP_VERSION = "0.1.8";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -245,20 +245,32 @@ const hasWebkitPip = typeof video.webkitSetPresentationMode === "function";
 const hasStdPip = !!(document.pictureInPictureEnabled && video.requestPictureInPicture);
 if (pipBtn && (hasWebkitPip || hasStdPip)) {
   pipBtn.classList.add("show");
-  pipBtn.addEventListener("click", async () => {
+  let pipBusy = false;
+  async function togglePip() {
+    if (pipBusy) return;
+    pipBusy = true;
+    setTimeout(() => { pipBusy = false; }, 400);
+    if (!currentId || !video.src) { alert("先に動画を再生してからやで"); return; }
     try {
       if (hasWebkitPip) {
-        const inPip = video.webkitPresentationMode === "picture-in-picture";
-        video.webkitSetPresentationMode(inPip ? "inline" : "picture-in-picture");
+        const before = video.webkitPresentationMode;
+        video.webkitSetPresentationMode(before === "picture-in-picture" ? "inline" : "picture-in-picture");
+        setTimeout(() => {
+          if (video.webkitPresentationMode === before) {
+            alert(`切替が効かんかった（mode=${before}のまま）。再生中の状態でもう一回試してや`);
+          }
+        }, 600);
       } else if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
       } else {
         await video.requestPictureInPicture();
       }
     } catch (err) {
-      alert(`ミニ再生に切り替えられんかった: ${(err && err.message) || err}\n（動画を再生してから押してや）`);
+      alert(`ミニ再生に切り替えられんかった: ${(err && err.name) || ""} ${(err && err.message) || err}`);
     }
-  });
+  }
+  pipBtn.addEventListener("click", togglePip);
+  pipBtn.addEventListener("touchend", (e) => { e.preventDefault(); togglePip(); });
   const syncPipLabel = () => {
     const inPip = video.webkitPresentationMode === "picture-in-picture" || !!document.pictureInPictureElement;
     pipBtn.textContent = inPip ? "◲ 戻す" : "◱ ミニ再生";

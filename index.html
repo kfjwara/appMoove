@@ -43,7 +43,7 @@
   .player-bar { display: flex; align-items: center; gap: 8px; padding: 8px 2px 4px; }
   .now-playing { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .now-playing b { color: var(--text); font-weight: 600; }
-  .pip-btn { flex: none; display: none; border: 1px solid #2c3140; background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+  .pip-btn { flex: none; display: none; border: 1px solid #2c3140; background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 9px; cursor: pointer; position: relative; z-index: 20; pointer-events: auto; }
   .pip-btn.show { display: block; }
   .pip-btn:active { background: var(--card-hover); }
 
