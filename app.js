@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.6";
+const APP_VERSION = "0.1.7";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -239,17 +239,33 @@ async function play(id) {
 
 /* ---------- ミニ再生 (PiP) ＆ ロック画面コントロール (Media Session) ---------- */
 const pipBtn = $("pip-btn");
-const pipSupported = typeof video.webkitSupportsPresentationMode === "function"
-  && video.webkitSupportsPresentationMode("picture-in-picture");
-if (pipSupported) {
+// 対応チェックは「APIが生えとるか」だけで判定する
+// （webkitSupportsPresentationModeは動画ロード前だとfalseを返すことがある）
+const hasWebkitPip = typeof video.webkitSetPresentationMode === "function";
+const hasStdPip = !!(document.pictureInPictureEnabled && video.requestPictureInPicture);
+if (pipBtn && (hasWebkitPip || hasStdPip)) {
   pipBtn.classList.add("show");
-  pipBtn.addEventListener("click", () => {
-    const inPip = video.webkitPresentationMode === "picture-in-picture";
-    video.webkitSetPresentationMode(inPip ? "inline" : "picture-in-picture");
+  pipBtn.addEventListener("click", async () => {
+    try {
+      if (hasWebkitPip) {
+        const inPip = video.webkitPresentationMode === "picture-in-picture";
+        video.webkitSetPresentationMode(inPip ? "inline" : "picture-in-picture");
+      } else if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      alert(`ミニ再生に切り替えられんかった: ${(err && err.message) || err}\n（動画を再生してから押してや）`);
+    }
   });
-  video.addEventListener("webkitpresentationmodechanged", () => {
-    pipBtn.textContent = video.webkitPresentationMode === "picture-in-picture" ? "◲ 戻す" : "◱ ミニ再生";
-  });
+  const syncPipLabel = () => {
+    const inPip = video.webkitPresentationMode === "picture-in-picture" || !!document.pictureInPictureElement;
+    pipBtn.textContent = inPip ? "◲ 戻す" : "◱ ミニ再生";
+  };
+  video.addEventListener("webkitpresentationmodechanged", syncPipLabel);
+  video.addEventListener("enterpictureinpicture", syncPipLabel);
+  video.addEventListener("leavepictureinpicture", syncPipLabel);
 }
 
 function setMediaSession(meta) {
