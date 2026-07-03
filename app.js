@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.5";
+const APP_VERSION = "0.1.6";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -233,7 +233,42 @@ async function play(id) {
     }
   });
   video.play().catch(() => { /* 自動再生ブロック時はユーザーが▶を押す */ });
+  setMediaSession(meta);
   renderList();
+}
+
+/* ---------- ミニ再生 (PiP) ＆ ロック画面コントロール (Media Session) ---------- */
+const pipBtn = $("pip-btn");
+const pipSupported = typeof video.webkitSupportsPresentationMode === "function"
+  && video.webkitSupportsPresentationMode("picture-in-picture");
+if (pipSupported) {
+  pipBtn.classList.add("show");
+  pipBtn.addEventListener("click", () => {
+    const inPip = video.webkitPresentationMode === "picture-in-picture";
+    video.webkitSetPresentationMode(inPip ? "inline" : "picture-in-picture");
+  });
+  video.addEventListener("webkitpresentationmodechanged", () => {
+    pipBtn.textContent = video.webkitPresentationMode === "picture-in-picture" ? "◲ 戻す" : "◱ ミニ再生";
+  });
+}
+
+function setMediaSession(meta) {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({ title: meta.name, artist: "appMoove" });
+  navigator.mediaSession.setActionHandler("play", () => video.play());
+  navigator.mediaSession.setActionHandler("pause", () => video.pause());
+  navigator.mediaSession.setActionHandler("seekbackward", (d) => { video.currentTime = Math.max(0, video.currentTime - (d.seekOffset || 10)); });
+  navigator.mediaSession.setActionHandler("seekforward", (d) => { video.currentTime = Math.min(video.duration || Infinity, video.currentTime + (d.seekOffset || 30)); });
+  try {
+    navigator.mediaSession.setActionHandler("nexttrack", () => {
+      const idx = videos.findIndex((v) => v.id === currentId);
+      if (videos[idx + 1]) play(videos[idx + 1].id);
+    });
+    navigator.mediaSession.setActionHandler("previoustrack", () => {
+      const idx = videos.findIndex((v) => v.id === currentId);
+      if (videos[idx - 1]) play(videos[idx - 1].id);
+    });
+  } catch (_) { /* 一部ハンドラ非対応の環境 */ }
 }
 
 async function savePosition() {

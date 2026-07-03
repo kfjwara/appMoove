@@ -1,7 +1,7 @@
 /* appMoove - Service Worker: アプリ本体を丸ごとキャッシュしてオフライン起動 */
 "use strict";
 
-const CACHE = "moove-v5";
+const CACHE = "moove-v6";
 const ASSETS = [
   "./",
   "./index.html",

@@ -40,8 +40,12 @@
   .player-box { display: none; position: sticky; top: env(safe-area-inset-top); z-index: 10; background: var(--bg); padding: 8px 0 4px; }
   .player-box.show { display: block; }
   video { width: 100%; border-radius: var(--radius); background: #000; display: block; max-height: 42vh; }
-  .now-playing { font-size: 13px; color: var(--text-dim); padding: 8px 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-bar { display: flex; align-items: center; gap: 8px; padding: 8px 2px 4px; }
+  .now-playing { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .now-playing b { color: var(--text); font-weight: 600; }
+  .pip-btn { flex: none; display: none; border: 1px solid #2c3140; background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+  .pip-btn.show { display: block; }
+  .pip-btn:active { background: var(--card-hover); }
 
   .import-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; margin: 12px 0; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; }
   .import-btn:active { opacity: .85; }
@@ -88,7 +92,10 @@
 
   <div class="player-box" id="player-box">
     <video id="video" controls playsinline preload="metadata"></video>
-    <div class="now-playing" id="now-playing"></div>
+    <div class="player-bar">
+      <div class="now-playing" id="now-playing"></div>
+      <button class="pip-btn" id="pip-btn">◱ ミニ再生</button>
+    </div>
   </div>
 
   <label class="import-btn" for="file-input">＋ 動画を取り込む</label>
