@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.8";
+const APP_VERSION = "0.1.9";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -245,11 +245,7 @@ const hasWebkitPip = typeof video.webkitSetPresentationMode === "function";
 const hasStdPip = !!(document.pictureInPictureEnabled && video.requestPictureInPicture);
 if (pipBtn && (hasWebkitPip || hasStdPip)) {
   pipBtn.classList.add("show");
-  let pipBusy = false;
-  async function togglePip() {
-    if (pipBusy) return;
-    pipBusy = true;
-    setTimeout(() => { pipBusy = false; }, 400);
+  function togglePip() {
     if (!currentId || !video.src) { alert("先に動画を再生してからやで"); return; }
     try {
       if (hasWebkitPip) {
@@ -257,20 +253,29 @@ if (pipBtn && (hasWebkitPip || hasStdPip)) {
         video.webkitSetPresentationMode(before === "picture-in-picture" ? "inline" : "picture-in-picture");
         setTimeout(() => {
           if (video.webkitPresentationMode === before) {
-            alert(`切替が効かんかった（mode=${before}のまま）。再生中の状態でもう一回試してや`);
+            const diag = [
+              `mode=${before}のまま`,
+              `supports=${typeof video.webkitSupportsPresentationMode === "function" ? video.webkitSupportsPresentationMode("picture-in-picture") : "?"}`,
+              `readyState=${video.readyState}`,
+              `paused=${video.paused}`,
+              `standalone=${!!window.navigator.standalone}`,
+              (navigator.userAgent.match(/OS \d+_\d+/) || ["iOS?"])[0],
+            ].join(" / ");
+            alert(`切替が効かんかった\n${diag}`);
           }
         }, 600);
       } else if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
+        document.exitPictureInPicture();
       } else {
-        await video.requestPictureInPicture();
+        video.requestPictureInPicture().catch((err) => {
+          alert(`ミニ再生に切り替えられんかった: ${err.name} ${err.message}`);
+        });
       }
     } catch (err) {
       alert(`ミニ再生に切り替えられんかった: ${(err && err.name) || ""} ${(err && err.message) || err}`);
     }
   }
   pipBtn.addEventListener("click", togglePip);
-  pipBtn.addEventListener("touchend", (e) => { e.preventDefault(); togglePip(); });
   const syncPipLabel = () => {
     const inPip = video.webkitPresentationMode === "picture-in-picture" || !!document.pictureInPictureElement;
     pipBtn.textContent = inPip ? "◲ 戻す" : "◱ ミニ再生";
