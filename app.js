@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.9";
+const APP_VERSION = "0.1.10";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -245,6 +245,13 @@ const hasWebkitPip = typeof video.webkitSetPresentationMode === "function";
 const hasStdPip = !!(document.pictureInPictureEnabled && video.requestPictureInPicture);
 if (pipBtn && (hasWebkitPip || hasStdPip)) {
   pipBtn.classList.add("show");
+  // ホーム画面PWAのiOSはPiP不可（supportsが常にfalse）— その場合はボタンを引っ込める
+  video.addEventListener("loadedmetadata", () => {
+    if (hasWebkitPip && typeof video.webkitSupportsPresentationMode === "function"
+      && !video.webkitSupportsPresentationMode("picture-in-picture")) {
+      pipBtn.classList.remove("show");
+    }
+  });
   function togglePip() {
     if (!currentId || !video.src) { alert("先に動画を再生してからやで"); return; }
     try {
@@ -284,6 +291,29 @@ if (pipBtn && (hasWebkitPip || hasStdPip)) {
   video.addEventListener("enterpictureinpicture", syncPipLabel);
   video.addEventListener("leavepictureinpicture", syncPipLabel);
 }
+
+/* 再生状態・位置をOSに報告し続ける（ロック画面からの復帰率を上げる） */
+function updatePositionState() {
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+  if (!isFinite(video.duration) || !video.duration) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: video.duration,
+      playbackRate: video.playbackRate,
+      position: Math.min(video.currentTime, video.duration),
+    });
+  } catch (_) { /* 位置報告は補助機能 */ }
+}
+video.addEventListener("play", () => {
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+  updatePositionState();
+});
+video.addEventListener("pause", () => {
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+  updatePositionState();
+});
+video.addEventListener("seeked", updatePositionState);
+video.addEventListener("ratechange", updatePositionState);
 
 function setMediaSession(meta) {
   if (!("mediaSession" in navigator)) return;
