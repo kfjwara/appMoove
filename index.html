@@ -52,6 +52,19 @@
   .import-btn:active { opacity: .85; }
   #file-input { display: none; }
 
+  .url-box { background: var(--card); border-radius: var(--radius); padding: 12px; margin: 12px 0; }
+  .url-box .row { display: flex; gap: 8px; }
+  .url-box input[type=url] { flex: 1; min-width: 0; background: #0f1218; border: 1px solid #2c3140; color: var(--text); font-size: 14px; padding: 11px 12px; border-radius: 10px; }
+  .url-box select { background: #0f1218; border: 1px solid #2c3140; color: var(--text); font-size: 13px; padding: 0 8px; border-radius: 10px; }
+  .url-box .go { flex: none; background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 0 16px; border-radius: 10px; cursor: pointer; }
+  .url-box .go:active { opacity: .85; }
+  .url-box .cap { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
+  details.cfg { margin-top: 8px; }
+  details.cfg summary { font-size: 12px; color: var(--text-dim); cursor: pointer; }
+  details.cfg label { display: block; font-size: 11px; color: var(--text-dim); margin: 8px 0 3px; }
+  details.cfg input { width: 100%; background: #0f1218; border: 1px solid #2c3140; color: var(--text); font-size: 12px; padding: 8px; border-radius: 8px; }
+  details.cfg .save { margin-top: 8px; background: #2c3140; color: var(--text); border: none; font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+
   .progress-row { background: var(--card); border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
   .progress-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .progress-row .bar { height: 4px; background: #262a36; border-radius: 2px; margin-top: 7px; overflow: hidden; }
@@ -99,8 +112,29 @@
     </div>
   </div>
 
-  <label class="import-btn" for="file-input">＋ 動画を取り込む</label>
+  <label class="import-btn" for="file-input">＋ 動画を取り込む（ファイルから）</label>
   <input type="file" id="file-input" accept="video/*" multiple>
+
+  <div class="url-box">
+    <div class="row">
+      <input type="url" id="url-input" inputmode="url" autocomplete="off" autocapitalize="off" placeholder="動画URLを貼る（YouTube等）">
+      <select id="url-quality" aria-label="画質">
+        <option value="360">360p</option>
+        <option value="720" selected>720p</option>
+        <option value="1080">1080p</option>
+      </select>
+      <button class="go" id="url-go">取り込み</button>
+    </div>
+    <div class="cap">URLから直接取り込み（実験）。cobalt の公開インスタンス経由で取得するで。1080pは合成が要って失敗することがあるから、まず720pで試すのがええ。</div>
+    <details class="cfg">
+      <summary>詳細設定（インスタンスが死んだら差し替え）</summary>
+      <label>cobalt API</label>
+      <input type="url" id="cfg-api" autocomplete="off" autocapitalize="off">
+      <label>CORSプロキシ（空欄=直接。self-host等でCORSが開いてるなら空でよい）</label>
+      <input type="url" id="cfg-proxy" autocomplete="off" autocapitalize="off">
+      <button class="save" id="cfg-save">設定を保存</button>
+    </details>
+  </div>
 
   <div id="import-progress"></div>
   <div id="list"></div>

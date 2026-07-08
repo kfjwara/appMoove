@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.1.11";
+const APP_VERSION = "0.2.0";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -148,15 +148,24 @@ worker.onmessage = async (e) => {
   const { id, type, written, total, message } = e.data;
   const p = pendingImports.get(id);
   if (!p) return;
+  const label = p.name || (p.file ? p.file.name : "video");
   if (type === "progress") {
-    const pct = Math.round((written / total) * 100);
-    p.rowEl.querySelector("i").style.width = pct + "%";
-    p.rowEl.querySelector(".name").textContent =
-      `${p.file.name}（${fmtSize(p.file.size)}）取り込み中… ${pct}%`;
+    if (total > 0) {
+      const pct = Math.round((written / total) * 100);
+      p.rowEl.querySelector("i").style.width = pct + "%";
+      p.rowEl.querySelector(".name").textContent = `${label}（${fmtSize(total)}）取り込み中… ${pct}%`;
+    } else {
+      // total不明（ネット取得でContent-Lengthが無い）= 書けたバイト数だけ出す
+      p.rowEl.querySelector("i").style.width = "100%";
+      p.rowEl.querySelector("i").style.opacity = "0.4";
+      p.rowEl.querySelector(".name").textContent = `${label} 取り込み中… ${fmtSize(written)}`;
+    }
   } else if (type === "done") {
+    const name = p.name || (p.file ? p.file.name.replace(/\.[^.]+$/, "") : "video");
+    const size = p.file ? p.file.size : (written || 0);
     await dbPut({
-      id, name: p.file.name.replace(/\.[^.]+$/, ""), size: p.file.size,
-      type: p.file.type, addedAt: Date.now(), position: 0, duration: 0,
+      id, name, size, type: (p.file && p.file.type) || "video/mp4",
+      addedAt: Date.now(), position: 0, duration: 0,
     });
     p.rowEl.remove();
     pendingImports.delete(id);
@@ -175,10 +184,10 @@ worker.onmessage = async (e) => {
       hint = "\n※画面ロックやアプリ切替で中断された可能性が高いで。画面を点けたまま置いといてや";
     }
     const detail = `保存失敗: ${message}\n${fmtSize(written || 0)}まで書けた${quotaInfo}${hint}`;
-    p.rowEl.querySelector(".name").textContent = `✕ ${p.file.name} — ${detail.replace(/\n/g, "／")}`;
+    p.rowEl.querySelector(".name").textContent = `✕ ${label} — ${detail.replace(/\n/g, "／")}`;
     pendingImports.delete(id);
     releaseWakeLockIfIdle();
-    alert(`「${p.file.name}」\n${detail}`);
+    alert(`「${label}」\n${detail}`);
   }
 };
 
@@ -198,6 +207,108 @@ $("file-input").addEventListener("change", (e) => {
     worker.postMessage({ id, file });
   }
 });
+
+/* ---------- URLで取り込み（cobalt API経由・実験） ---------- */
+const DEFAULTS = {
+  cobaltApi: "https://api.cobalt.liubquanti.click/",
+  corsProxy: "https://proxy.cors.sh/",
+};
+function getCfg() {
+  return {
+    cobaltApi: localStorage.getItem("moove.cobaltApi") || DEFAULTS.cobaltApi,
+    corsProxy: localStorage.getItem("moove.corsProxy") ?? DEFAULTS.corsProxy,
+  };
+}
+function saveCfg(cobaltApi, corsProxy) {
+  localStorage.setItem("moove.cobaltApi", cobaltApi.trim() || DEFAULTS.cobaltApi);
+  localStorage.setItem("moove.corsProxy", corsProxy.trim());
+}
+
+// cobaltにURLを渡してメディアURL(tunnel等)を得る
+async function resolveViaCobalt(pageUrl, quality) {
+  const cfg = getCfg();
+  const api = cfg.cobaltApi.endsWith("/") ? cfg.cobaltApi : cfg.cobaltApi + "/";
+  const endpoint = cfg.corsProxy ? cfg.corsProxy + api : api;
+  let res;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ url: pageUrl, videoQuality: quality, downloadMode: "auto" }),
+    });
+  } catch (err) {
+    throw new Error(`cobaltに接続できん: ${err.message}（CORSプロキシが落ちてる/弾かれてる可能性。詳細設定を見直してや）`);
+  }
+  let data;
+  try { data = await res.json(); }
+  catch (_) { throw new Error(`cobaltの応答が壊れとる（HTTP ${res.status}）。プロキシがブロックページを返しとるかも`); }
+
+  switch (data.status) {
+    case "tunnel":
+    case "redirect":
+    case "stream":
+      return { url: data.url, name: cleanName(data.filename) };
+    case "picker": {
+      const item = (data.picker || []).find((x) => x.type === "video") || (data.picker || [])[0];
+      if (!item) throw new Error("pickerが空やった");
+      return { url: item.url, name: cleanName(data.filename || item.filename) };
+    }
+    case "local-processing":
+      throw new Error("この動画はクライアント側での合成が必要な形式（未対応）。画質を下げるか別の動画で試してや");
+    case "error":
+      throw new Error(`cobaltエラー: ${(data.error && data.error.code) || "不明"}`);
+    default:
+      throw new Error(`未知の応答: ${JSON.stringify(data).slice(0, 120)}`);
+  }
+}
+function cleanName(fn) {
+  if (!fn) return "video " + new Date().toISOString().slice(0, 16).replace("T", " ");
+  return fn.replace(/\.[^.]+$/, "").slice(0, 120);
+}
+
+async function importFromUrl(pageUrl, quality) {
+  const id = crypto.randomUUID();
+  const rowEl = document.createElement("div");
+  rowEl.className = "progress-row";
+  rowEl.innerHTML = `<div class="name">URL解析中…（cobaltに問い合わせ）</div><div class="bar"><i></i></div>`;
+  importProgressEl.appendChild(rowEl);
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  acquireWakeLock();
+  try {
+    const { url, name } = await resolveViaCobalt(pageUrl, quality);
+    rowEl.querySelector(".name").textContent = `${name} 取り込み開始…`;
+    pendingImports.set(id, { name, rowEl });
+    worker.postMessage({ id, url });
+  } catch (err) {
+    rowEl.classList.add("error");
+    rowEl.querySelector(".name").textContent = "✕ " + err.message;
+    releaseWakeLockIfIdle();
+    alert(err.message);
+  }
+}
+
+$("url-go").addEventListener("click", () => {
+  const input = $("url-input");
+  const url = input.value.trim();
+  if (!/^https?:\/\//i.test(url)) { alert("http(s) で始まるURLを貼ってや"); return; }
+  const quality = $("url-quality").value;
+  input.value = "";
+  importFromUrl(url, quality);
+});
+
+// 詳細設定の初期値流し込み＆保存
+(function initCfg() {
+  const cfg = getCfg();
+  $("cfg-api").value = cfg.cobaltApi;
+  $("cfg-proxy").value = cfg.corsProxy;
+  $("cfg-save").addEventListener("click", () => {
+    saveCfg($("cfg-api").value, $("cfg-proxy").value);
+    const c = getCfg();
+    $("cfg-api").value = c.cobaltApi;
+    $("cfg-proxy").value = c.corsProxy;
+    alert("設定を保存したで");
+  });
+})();
 
 /* ---------- 再生 ---------- */
 async function play(id) {
