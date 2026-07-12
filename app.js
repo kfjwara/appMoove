@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");

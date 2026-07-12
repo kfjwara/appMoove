@@ -73,8 +73,17 @@
   .progress-row.error .name { white-space: normal; word-break: break-all; }
 
   #list { margin-top: 6px; }
-  .item { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor: pointer; }
-  .item.playing { outline: 2px solid var(--accent); }
+  .item { display: flex; align-items: center; gap: 12px; background: var(--card); border: 2px solid transparent; border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor: pointer; }
+  .item.playing {
+    background:
+      linear-gradient(var(--card), var(--card)) padding-box,
+      linear-gradient(120deg, #a78bfa, #6366f1, #22d3ee, #6366f1, #a78bfa) border-box;
+    background-size: auto, 300% 100%;
+    box-shadow: 0 0 18px rgba(139, 92, 246, .28);
+    animation: playing-border 6s linear infinite;
+  }
+  @keyframes playing-border { to { background-position: 0 0, 150% 0; } }
+  @media (prefers-reduced-motion: reduce) { .item.playing { animation: none; } }
   .item .info { flex: 1; min-width: 0; }
   .item .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
