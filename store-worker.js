@@ -22,6 +22,7 @@ async function storeFromUrl({ id, url }) {
     const res = await fetch(url, { redirect: "follow" });
     if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : "?"}`);
     if (!res.body) throw new Error("レスポンスにストリームが無い");
+    // CORSプロキシ経由やと Content-Length が expose されず取れんことがある（その時は0扱い）
     const total = Number(res.headers.get("content-length")) || 0;
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle(id, { create: true });
@@ -34,7 +35,8 @@ async function storeFromUrl({ id, url }) {
       if (done) break;
       handle.write(value, { at });
       at += value.byteLength;
-      if (at - lastPost >= 4 * 1024 * 1024) {
+      // 進捗通知は毎チャンクやと過剰なので、前回から256KB以上増えた時だけ間引いて送る
+      if (at - lastPost >= 256 * 1024) {
         lastPost = at;
         postMessage({ id, type: "progress", written: at, total });
       }

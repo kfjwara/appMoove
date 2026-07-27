@@ -56,7 +56,10 @@
   .url-box .row { display: flex; gap: 8px; }
   .url-box input[type=url] { flex: 1; min-width: 0; background: #0f1218; border: 1px solid #2c3140; color: var(--text); font-size: 14px; padding: 11px 12px; border-radius: 10px; }
   .url-box select { background: #0f1218; border: 1px solid #2c3140; color: var(--text); font-size: 13px; padding: 0 8px; border-radius: 10px; }
-  .url-box .go { flex: none; background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 0 16px; border-radius: 10px; cursor: pointer; }
+  .url-box .paste-go { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 13px; margin-bottom: 10px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
+  .url-box .paste-go:active { opacity: .85; }
+  /* 手動入力側はフォールバック扱いなので、ボタンは控えめ（グレー）にする */
+  .url-box .go { flex: none; background: #2c3140; color: var(--text); border: none; font-size: 14px; font-weight: 600; padding: 0 16px; border-radius: 10px; cursor: pointer; }
   .url-box .go:active { opacity: .85; }
   .url-box .cap { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
   details.cfg { margin-top: 8px; }
@@ -71,6 +74,10 @@
   .progress-row .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; }
   .progress-row.error { color: var(--danger); }
   .progress-row.error .name { white-space: normal; word-break: break-all; }
+  /* 合計サイズ不明のとき（Content-Lengthが取れん）のバー不定モード */
+  .progress-row.indeterminate .bar { overflow: hidden; }
+  .progress-row.indeterminate .bar i { width: 40%; animation: indet 1.1s ease-in-out infinite; }
+  @keyframes indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 
   #list { margin-top: 6px; }
   .item { display: flex; align-items: center; gap: 12px; background: var(--card); border: 2px solid transparent; border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor: pointer; }
@@ -125,6 +132,7 @@
   <input type="file" id="file-input" accept="video/*" multiple>
 
   <div class="url-box">
+    <button class="paste-go" id="paste-go">ペーストして取り込み</button>
     <div class="row">
       <input type="url" id="url-input" inputmode="url" autocomplete="off" autocapitalize="off" placeholder="動画URLを貼る（YouTube等）">
       <select id="url-quality" aria-label="画質">

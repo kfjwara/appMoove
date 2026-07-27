@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.3.0";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const listEl = $("list");
@@ -39,6 +39,11 @@ function fmtSize(bytes) {
   if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + " GB";
   if (bytes >= 1e6) return (bytes / 1e6).toFixed(0) + " MB";
   return Math.max(1, Math.round(bytes / 1e3)) + " KB";
+}
+// 取得済みバイト数の表示用（合計不明のとき「12.3MB」のように小数1桁で出す）
+function fmtLoaded(bytes) {
+  if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + "GB";
+  return (bytes / 1e6).toFixed(1) + "MB";
 }
 function fmtTime(sec) {
   sec = Math.floor(sec || 0);
@@ -152,13 +157,14 @@ worker.onmessage = async (e) => {
   if (type === "progress") {
     if (total > 0) {
       const pct = Math.round((written / total) * 100);
+      p.rowEl.classList.remove("indeterminate");
       p.rowEl.querySelector("i").style.width = pct + "%";
       p.rowEl.querySelector(".name").textContent = `${label}（${fmtSize(total)}）取り込み中… ${pct}%`;
     } else {
-      // total不明（ネット取得でContent-Lengthが無い）= 書けたバイト数だけ出す
-      p.rowEl.querySelector("i").style.width = "100%";
-      p.rowEl.querySelector("i").style.opacity = "0.4";
-      p.rowEl.querySelector(".name").textContent = `${label} 取り込み中… ${fmtSize(written)}`;
+      // total不明（CORSプロキシがContent-Lengthを通さん等）= 取得済みバイト数だけ出す＋バーは不定モード
+      p.rowEl.classList.add("indeterminate");
+      p.rowEl.querySelector("i").style.width = "";
+      p.rowEl.querySelector(".name").textContent = `${label} 取り込み中… ${fmtLoaded(written)} 取得済み`;
     }
   } else if (type === "done") {
     const name = p.name || (p.file ? p.file.name.replace(/\.[^.]+$/, "") : "video");
@@ -294,6 +300,28 @@ $("url-go").addEventListener("click", () => {
   const quality = $("url-quality").value;
   input.value = "";
   importFromUrl(url, quality);
+});
+
+// ワンアクション取り込み：クリップボードを読んで妥当なURLなら即取り込む。
+// iOS Safariは readText() がユーザージェスチャ起点やないと弾かれるので、
+// クリックハンドラ内で（先に何もawaitせず）直接 readText() を呼ぶこと。
+$("paste-go").addEventListener("click", () => {
+  const fallback = (msg) => { alert(msg); $("url-input").focus(); };
+  if (!navigator.clipboard || !navigator.clipboard.readText) {
+    fallback("クリップボード読み取りに非対応の環境やわ。下の欄にURL貼って「取り込み」押してや");
+    return;
+  }
+  const quality = $("url-quality").value;
+  navigator.clipboard.readText().then((text) => {
+    const url = (text || "").trim();
+    if (!/^https?:\/\//i.test(url)) {
+      fallback("クリップボードにURLが入ってへんみたいや。下の欄に貼って「取り込み」押してや");
+      return;
+    }
+    importFromUrl(url, quality);
+  }).catch(() => {
+    fallback("クリップボード読めへんかった（権限拒否かも）。下の欄にURL貼って「取り込み」押してや");
+  });
 });
 
 // 詳細設定の初期値流し込み＆保存
