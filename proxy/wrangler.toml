@@ -1,0 +1,17 @@
+# appMoove CORS プロキシ (Cloudflare Worker) の設定
+# 秘密情報はここに書かないこと（このファイルは GitHub Pages で公開され得る）。
+
+name = "appmoove-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+# 呼び出しを許可するサイト（Origin）。カンマ区切り。
+#   "http://localhost:*" はポート番号を問わず許可（ローカル開発用）。
+ALLOWED_ORIGINS = "https://kfjwara.github.io,http://localhost:*,http://127.0.0.1:*"
+
+# 中継を許可する転送先ホスト。カンマ区切り。"*.example.com" でサブドメインも許可。
+#   cobalt インスタンスを差し替えたら、そのホスト名をここに足す/置き換える。
+#   （tunnel のダウンロード URL も同じホストを指す。全許可 "*" は無効化してある）
+ALLOWED_HOSTS = "api.cobalt.liubquanti.click"
