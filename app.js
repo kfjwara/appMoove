@@ -1,7 +1,7 @@
 /* appMoove - オフライン動画プレイヤー (Phase 1) */
 "use strict";
 
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.4.1";
 const $ = (id) => document.getElementById(id);
 const video = $("video");
 const audio = $("audio");
@@ -59,18 +59,51 @@ function esc(s) {
 
 /* ---------- 種別（音声/動画）判定 ---------- */
 const EXT_MIME = {
-  mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav",
-  ogg: "audio/ogg", opus: "audio/ogg", flac: "audio/flac",
+  mp3: "audio/mpeg", m4a: "audio/mp4", m4b: "audio/mp4", aac: "audio/aac", wav: "audio/wav",
+  ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", flac: "audio/flac",
+  aif: "audio/aiff", aiff: "audio/aiff", caf: "audio/x-caf",
   mp4: "video/mp4", m4v: "video/x-m4v", mov: "video/quicktime", webm: "video/webm",
+  "3gp": "video/3gpp", mkv: "video/x-matroska",
 };
+function extOfName(name) {
+  const m = /\.([^./\\]+)$/.exec(String(name || ""));
+  return m ? m[1].toLowerCase() : "";
+}
 function mimeFromExt(nameOrExt) {
   const ext = String(nameOrExt || "").toLowerCase().replace(/^.*\./, "");
   return EXT_MIME[ext] || "";
 }
+// ブラウザ/OSごとの別名を、<audio>/<video>が素直に受け取る標準的な名前にそろえる
+const MIME_ALIAS = {
+  "audio/x-m4a": "audio/mp4", "audio/m4a": "audio/mp4", "audio/x-m4b": "audio/mp4", "audio/m4b": "audio/mp4",
+  "audio/mp3": "audio/mpeg", "audio/x-mp3": "audio/mpeg", "audio/x-mpeg": "audio/mpeg", "audio/mpeg3": "audio/mpeg", "audio/x-mpeg-3": "audio/mpeg",
+  "audio/x-wav": "audio/wav", "audio/wave": "audio/wav", "audio/vnd.wave": "audio/wav",
+  "audio/x-flac": "audio/flac", "audio/x-aac": "audio/aac", "audio/aacp": "audio/aac",
+  "audio/x-aiff": "audio/aiff", "audio/opus": "audio/ogg", "application/ogg": "audio/ogg",
+};
 // Content-Type等から「audio/xxx」「video/xxx」だけを取り出す（; charset等は捨てる。それ以外は空）
 function mediaMime(ct) {
-  const t = String(ct || "").split(";")[0].trim().toLowerCase();
+  let t = String(ct || "").split(";")[0].trim().toLowerCase();
+  t = MIME_ALIAS[t] || t;
   return /^(audio|video)\//.test(t) ? t : "";
+}
+// 明らかに動画・音声やない拡張子（type が空で来ても弾けるように）
+const NON_MEDIA_EXT = /^(pdf|jpe?g|png|gif|heic|heif|webp|bmp|tiff?|svg|zip|rar|7z|gz|tar|txt|rtf|md|csv|json|xml|html?|docx?|xlsx?|pptx?|pages|numbers|key|epub|ipa|apk|exe|dmg|srt|vtt|ass)$/;
+// 取り込むファイルの保存MIMEを決める。動画でも音声でもなさそうなら "" を返す
+// 優先: 拡張子が音声（iOSは m4a を video/mp4 等で渡すこともある）→ file.type → 拡張子 → 既定（動画）
+function importMime(file) {
+  const ext = extOfName(file.name);
+  const byExt = mimeFromExt(ext);
+  const raw = String(file.type || "").split(";")[0].trim().toLowerCase();
+  const byType = mediaMime(raw);
+  if (/^audio\//.test(byExt)) return byExt;
+  if (byType) return byType;
+  if (byExt) return byExt;
+  // type が中身を示しとって（octet-stream 等の「不明」以外）、それが動画・音声やないなら弾く
+  if (raw && raw !== "application/octet-stream") return "";
+  if (NON_MEDIA_EXT.test(ext)) return "";
+  // 拡張子も type も手がかりなし: 従来どおり動画扱い（再生できるかは中身次第）
+  return "video/mp4";
 }
 // 種別情報(kind)を持たん古いレコードは type で判定し、それも無ければ動画扱い
 function isAudio(meta) {
@@ -200,7 +233,7 @@ worker.onmessage = async (e) => {
     // 実際の種別を保存する。ファイル: file.type→拡張子、URL: Content-Type→拡張子→指定モードの順で推定
     let mtype, kind;
     if (p.file) {
-      mtype = mediaMime(p.file.type) || mimeFromExt(p.file.name) || "video/mp4";
+      mtype = p.mtype || importMime(p.file) || "video/mp4";
       kind = /^audio\//.test(mtype) ? "audio" : "video";
     } else {
       mtype = mediaMime(mime) || mimeFromExt(p.ext) || (p.audioOnly ? "audio/mpeg" : "video/mp4");
@@ -237,18 +270,27 @@ worker.onmessage = async (e) => {
 };
 
 $("file-input").addEventListener("change", (e) => {
-  const files = [...e.target.files];
+  const picked = [...e.target.files];
   e.target.value = "";
+  // ピッカーはどのファイルでも選べるので、動画・音声やなさそうなものはここで弾く
+  const files = [], rejected = [];
+  for (const file of picked) {
+    const mtype = importMime(file);
+    if (mtype) files.push({ file, mtype }); else rejected.push(file.name);
+  }
+  if (rejected.length) {
+    alert(`${rejected.map((n) => `「${n}」`).join("")}は動画でも音声でもなさそうやから、取り込まへんかったで。\nmp4・mov・m4a・mp3 みたいなファイルを選んでな。`);
+  }
   if (!files.length) return;
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   acquireWakeLock();
-  for (const file of files) {
+  for (const { file, mtype } of files) {
     const id = crypto.randomUUID();
     const rowEl = document.createElement("div");
     rowEl.className = "progress-row";
     rowEl.innerHTML = `<div class="name">${esc(file.name)}（${fmtSize(file.size)}）取り込み開始… 0%</div><div class="bar"><i></i></div>`;
     importProgressEl.appendChild(rowEl);
-    pendingImports.set(id, { file, rowEl });
+    pendingImports.set(id, { file, rowEl, mtype });
     worker.postMessage({ id, file });
   }
 });
