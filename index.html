@@ -47,6 +47,15 @@
   .pip-btn { flex: none; display: none; border: 1px solid #2c3140; background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 9px; cursor: pointer; position: relative; z-index: 20; pointer-events: auto; }
   .pip-btn.show { display: block; }
   .pip-btn:active { background: var(--card-hover); }
+  /* 音声アイテム再生中は<audio>を出して<video>とミニ再生ボタンを隠す */
+  audio { width: 100%; display: block; }
+  .player-box.audio-mode video, .player-box.audio-mode .pip-btn.show { display: none; }
+  .player-box:not(.audio-mode) audio { display: none; }
+  .player-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 2px 4px; }
+  .player-ctl select, .player-ctl button { flex: none; border: 1px solid #2c3140; background: var(--card); color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 10px; border-radius: 9px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+  .player-ctl button:active { background: var(--card-hover); }
+  .player-ctl button.on { border-color: rgba(99,102,241,.6); background: var(--accent-soft); color: #c7c9f5; }
+  .player-ctl .sleep-left { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
   .import-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; margin: 12px 0; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; }
   .import-btn:active { opacity: .85; }
@@ -93,6 +102,7 @@
   @media (prefers-reduced-motion: reduce) { .item.playing { animation: none; } }
   .item .info { flex: 1; min-width: 0; }
   .item .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .kind { margin-right: 6px; font-size: 13px; }
   .item .meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
   .item .watchbar { height: 3px; background: #262a36; border-radius: 2px; margin-top: 7px; overflow: hidden; }
   .item .watchbar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
@@ -122,14 +132,33 @@
 
   <div class="player-box" id="player-box">
     <video id="video" controls playsinline preload="metadata"></video>
+    <audio id="audio" controls preload="metadata"></audio>
     <div class="player-bar">
       <div class="now-playing" id="now-playing"></div>
       <button class="pip-btn" id="pip-btn">◱ ミニ再生</button>
     </div>
+    <div class="player-ctl">
+      <select id="rate-select" aria-label="再生速度">
+        <option value="0.75">0.75x</option>
+        <option value="1">1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="1.75">1.75x</option>
+        <option value="2">2x</option>
+      </select>
+      <select id="sleep-select" aria-label="スリープタイマー">
+        <option value="0">⏾ タイマー切</option>
+        <option value="15">⏾ 15分で止める</option>
+        <option value="30">⏾ 30分で止める</option>
+        <option value="60">⏾ 60分で止める</option>
+      </select>
+      <span class="sleep-left" id="sleep-left"></span>
+      <button id="auto-next" aria-pressed="true">⏭ 連続再生 ON</button>
+    </div>
   </div>
 
-  <label class="import-btn" for="file-input">＋ 動画を取り込む（ファイルから）</label>
-  <input type="file" id="file-input" accept="video/*" multiple>
+  <label class="import-btn" for="file-input">＋ 動画・音声を取り込む（ファイルから）</label>
+  <input type="file" id="file-input" accept="video/*,audio/*" multiple>
 
   <div class="url-box">
     <button class="paste-go" id="paste-go">ペーストして取り込み</button>
@@ -139,15 +168,16 @@
         <option value="360">360p</option>
         <option value="720" selected>720p</option>
         <option value="1080">1080p</option>
+        <option value="audio">音声のみ</option>
       </select>
       <button class="go" id="url-go">取り込み</button>
     </div>
-    <div class="cap">URLから直接取り込み（実験）。cobalt の公開インスタンス経由で取得するで。1080pは合成が要って失敗することがあるから、まず720pで試すのがええ。</div>
+    <div class="cap">URLから直接取り込み（実験）。cobalt の公開インスタンス経由で取得するで。1080pは合成が要って失敗することがあるから、まず720pで試すのがええ。「音声のみ」にすると mp3 で保存して、ロック中も鳴らしやすい音声モードで再生するで。</div>
     <details class="cfg">
       <summary>詳細設定（インスタンスが死んだら差し替え）</summary>
       <label>cobalt API</label>
       <input type="url" id="cfg-api" autocomplete="off" autocapitalize="off">
-      <label>CORSプロキシ（空欄=直接。self-host等でCORSが開いてるなら空でよい）</label>
+      <label>CORSプロキシ（中継役。自分の Cloudflare Worker の URL を入れる。例: https://appmoove-proxy.○○.workers.dev/）</label>
       <input type="url" id="cfg-proxy" autocomplete="off" autocapitalize="off">
       <button class="save" id="cfg-save">設定を保存</button>
     </details>
